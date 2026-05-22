@@ -1,0 +1,13 @@
+# Copia a terraform.tfvars y rellena.
+# Para los valores de SES, primero corre terraform en aws/ y trae los outputs.
+
+cloudflare_api_token  = "tu-token-cloudflare"
+cloudflare_account_id = "tu-account-id"
+domain                = "tudominio.com"
+
+# Estos vienen del output de terraform/aws después de aplicar SES.
+# Ejemplo de cómo traerlos:
+#   cd ../aws && terraform output -json ses_dkim_tokens
+ses_verification_token = ""
+ses_dkim_tokens        = []
+aws_region             = "us-east-1"

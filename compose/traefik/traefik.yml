@@ -1,0 +1,24 @@
+# =============================================================================
+# Traefik — Configuración estática
+# =============================================================================
+
+api:
+  dashboard: true
+  insecure: true  # Solo accesible desde 127.0.0.1:8080
+
+entryPoints:
+  web:
+    address: ":80"
+
+providers:
+  docker:
+    exposedByDefault: false
+    network: homestack-proxy
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+log:
+  level: INFO
+
+accessLog: {}

@@ -1,0 +1,7 @@
+# Copia este archivo a terraform.tfvars y rellena con tus valores.
+# terraform.tfvars está en .gitignore, no se sube.
+
+aws_region            = "us-east-1"
+aws_profile           = "homestack"
+domain                = "tudominio.com"
+from_email_local_part = "noreply"

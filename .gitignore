@@ -1,0 +1,96 @@
+# =============================================================================
+# Homestack — .gitignore
+# =============================================================================
+# Regla general: si contiene un secreto o un valor específico de tu entorno,
+# no va al repo. Los archivos .example sí van (son plantillas sin valores reales).
+
+# -----------------------------------------------------------------------------
+# Entorno local
+# -----------------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+# .env.example → SÍ se trackea (plantilla sin secretos)
+
+# -----------------------------------------------------------------------------
+# Terraform
+# -----------------------------------------------------------------------------
+# Valores reales de variables (dominio, tokens, keys)
+*.tfvars
+*.tfvars.json
+# .tfvars.example → SÍ se trackea
+
+# Estado de Terraform (contiene valores en texto plano, incluyendo secrets)
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+
+# Directorio de providers descargados (binarios pesados, regenerables)
+**/.terraform/
+.terraform.lock.hcl
+
+# Planes de ejecución
+*.tfplan
+*.tfplan.json
+
+# Override files (uso local, no compartir)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# -----------------------------------------------------------------------------
+# SOPS / age (encriptación de secretos)
+# -----------------------------------------------------------------------------
+# Claves privadas age
+*.agekey
+identity.txt
+# Nota: archivos .sops.yaml sin valores reales SÍ pueden trackearse
+
+# -----------------------------------------------------------------------------
+# Certificados y claves privadas
+# -----------------------------------------------------------------------------
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+
+# -----------------------------------------------------------------------------
+# macOS
+# -----------------------------------------------------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# -----------------------------------------------------------------------------
+# Editors / IDEs
+# -----------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# -----------------------------------------------------------------------------
+# Python (mcp-vikunja)
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+dist/
+*.egg-info/
+.pytest_cache/
+
+# -----------------------------------------------------------------------------
+# Logs y temporales
+# -----------------------------------------------------------------------------
+*.log
+*.tmp

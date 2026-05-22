@@ -1,0 +1,6 @@
+---
+# Configuración opcional para que Homepage muestre estado de containers Docker/Podman.
+# Si quieres habilitarlo, descomenta y ajusta.
+
+# my-docker:
+#   socket: /var/run/docker.sock

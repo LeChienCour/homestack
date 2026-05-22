@@ -1,0 +1,16 @@
+---
+# Bookmarks externos opcionales. Agrega los que quieras.
+
+- Desarrollo:
+    - GitHub:
+        - abbr: GH
+          href: https://github.com
+
+    - AWS Console:
+        - abbr: AWS
+          href: https://console.aws.amazon.com
+
+- Personal:
+    - Notion:
+        - abbr: N
+          href: https://notion.so

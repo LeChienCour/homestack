@@ -1,0 +1,19 @@
+[project]
+name = "mcp-vikunja"
+version = "0.1.0"
+description = "MCP server para gestionar tickets de Vikunja desde Claude"
+requires-python = ">=3.10"
+dependencies = [
+    "fastmcp>=3.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.scripts]
+mcp-vikunja = "src.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]

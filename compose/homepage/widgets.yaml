@@ -1,0 +1,18 @@
+---
+# Widgets que aparecen arriba del dashboard
+
+- resources:
+    cpu: true
+    memory: true
+    disk: /
+    label: Mac mini
+
+- datetime:
+    text_size: xl
+    format:
+      timeStyle: short
+      dateStyle: long
+
+- greeting:
+    text_size: xl
+    text: ¡Hola Diego!

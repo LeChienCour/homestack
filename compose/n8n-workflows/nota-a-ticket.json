@@ -1,0 +1,77 @@
+{
+  "name": "Nota rapida a ticket Vikunja (via Ollama)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nota-a-ticket",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "Webhook - Nota entrante",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "nota-a-ticket"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.containers.internal:11434/api/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama3.2:3b\",\n  \"prompt\": \"Eres un asistente que clasifica notas en tickets. Dada esta nota, responde SOLO con JSON valido (sin markdown) con: title (string corto), priority (0-5), project (uno de: FinOps, OfficeAgent, Fotogramia, Homestack, Personal), labels (array de strings). Nota: {{ $json.body.nota }}\",\n  \"stream\": false,\n  \"format\": \"json\"\n}",
+        "options": {}
+      },
+      "name": "Ollama - Clasificar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parsea la respuesta de Ollama y mapea proyecto a project_id de Vikunja\nconst raw = $input.first().json.response;\nlet parsed;\ntry {\n  parsed = JSON.parse(raw);\n} catch (e) {\n  parsed = { title: $('Webhook - Nota entrante').first().json.body.nota.slice(0, 60), priority: 1, project: 'Personal', labels: [] };\n}\n\n// Mapa proyecto -> id de Vikunja (ajusta los IDs a los tuyos reales)\nconst projectMap = {\n  'FinOps': 1,\n  'OfficeAgent': 2,\n  'Fotogramia': 3,\n  'Homestack': 4,\n  'Personal': 5\n};\n\nreturn {\n  title: parsed.title,\n  description: $('Webhook - Nota entrante').first().json.body.nota,\n  priority: parsed.priority || 1,\n  project_id: projectMap[parsed.project] || 5,\n  labels: parsed.labels || []\n};"
+      },
+      "name": "Procesar respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=http://vikunja:3456/api/v1/projects/{{ $json.project_id }}/tasks",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.VIKUNJA_API_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"title\": \"{{ $json.title }}\",\n  \"description\": \"{{ $json.description }}\",\n  \"priority\": {{ $json.priority }}\n}",
+        "options": {}
+      },
+      "name": "Vikunja - Crear ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Nota entrante": {
+      "main": [[{ "node": "Ollama - Clasificar", "type": "main", "index": 0 }]]
+    },
+    "Ollama - Clasificar": {
+      "main": [[{ "node": "Procesar respuesta", "type": "main", "index": 0 }]]
+    },
+    "Procesar respuesta": {
+      "main": [[{ "node": "Vikunja - Crear ticket", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {},
+  "_comment": "Importa este workflow en n8n. Requiere: (1) Ollama corriendo nativo en macOS con llama3.2:3b, (2) VIKUNJA_API_TOKEN en variables de entorno de n8n, (3) ajustar projectMap con los IDs reales de tus proyectos. El host.containers.internal apunta del container de n8n al Ollama nativo del Mac."
+}

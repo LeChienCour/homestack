@@ -1,0 +1,31 @@
+# =============================================================================
+# Traefik — Configuración dinámica: middlewares de seguridad
+# =============================================================================
+
+http:
+  middlewares:
+    # Headers de seguridad estándar
+    secure-headers:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        # HSTS se maneja en Cloudflare, no aquí
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+
+    # Rate limiting básico (protege contra abuse)
+    rate-limit:
+      rateLimit:
+        average: 100
+        burst: 50
+
+    # Para Vaultwarden (admin panel restringido)
+    vaultwarden-admin-ipwhitelist:
+      ipWhiteList:
+        sourceRange:
+          - "127.0.0.1/32"
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"

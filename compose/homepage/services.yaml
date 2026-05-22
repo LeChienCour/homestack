@@ -1,0 +1,50 @@
+---
+# Lista de servicios. Reemplaza tudominio.com por tu dominio real.
+
+- Productividad:
+    - n8n:
+        href: https://n8n.tudominio.com
+        description: Automatización de flujos
+        icon: n8n.png
+
+    - Vikunja:
+        href: https://tasks.tudominio.com
+        description: Tickets y proyectos
+        icon: vikunja.png
+
+    - Vaultwarden:
+        href: https://vault.tudominio.com
+        description: Gestor de contraseñas
+        icon: vaultwarden.png
+
+    - Docuseal:
+        href: https://sign.tudominio.com
+        description: Firma electrónica
+        icon: docuseal.png
+
+- Marketing:
+    - Listmonk:
+        href: https://mail.tudominio.com
+        description: Email marketing
+        icon: listmonk.png
+
+    - Postiz:
+        href: https://social.tudominio.com
+        description: Gestión redes sociales
+        icon: postiz.png
+
+- Observabilidad:
+    - Umami:
+        href: https://stats.tudominio.com
+        description: Web analytics
+        icon: umami.png
+
+    - Beszel:
+        href: https://metrics.tudominio.com
+        description: Métricas del stack
+        icon: beszel.png
+
+    - Dozzle:
+        href: https://logs.tudominio.com
+        description: Logs en tiempo real
+        icon: dozzle.png
