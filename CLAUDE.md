@@ -50,7 +50,17 @@ Stack personal self-hosted que corre en un **Mac mini Apple Silicon de 16GB RAM*
 | Beszel | metrics. | Monitoring | 50MB |
 | Dozzle | logs. | Logs en vivo | 20MB |
 
+**RAM total containers ≈ 2.780 MB** (~2.7 GB). Con 16 GB en el Mac mini sobra margen. Antes de agregar servicio nuevo, verificar que la suma no supere ~12 GB (dejar 4 GB para macOS + Podman Machine + Ollama).
+
 Externos: AWS SES (email), Ollama nativo (IA local), Cloudflare (DNS+tunnel), disco USB (backups).
+
+### Ollama — conectividad desde containers
+
+Ollama corre **nativo en macOS**, puerto `11434`. Los containers de Podman lo alcanzan via:
+```
+http://host.docker.internal:11434
+```
+Usar esta URL en n8n (nodo Ollama), en workflows, y en cualquier variable de entorno que apunte a la IA local. **No usar `localhost`** desde dentro de un container (no funciona en Podman/Docker en Mac).
 
 ## Estructura del repo
 
@@ -58,20 +68,22 @@ Externos: AWS SES (email), Ollama nativo (IA local), Cloudflare (DNS+tunnel), di
 homestack/
 ├── CLAUDE.md                 # este archivo
 ├── README.md                 # guía de setup paso a paso
+├── Makefile                  # todos los comandos operacionales (make help)
 ├── .env.example              # plantilla de variables
-├── .sops.yaml                # config de encriptación
+├── .sops.yaml                # placeholder — ver nota abajo
 ├── terraform/
 │   ├── aws/                  # SES + IAM
 │   └── cloudflare/           # tunnel + DNS + DKIM
 ├── compose/
 │   ├── docker-compose.yml    # stack completo (13 servicios)
+│   ├── .env                  # secretos reales (gitignored, NO commitear)
 │   ├── traefik/              # config proxy
 │   ├── postgres/init/        # crea las DBs
 │   ├── homepage/             # config dashboard
 │   └── n8n-workflows/        # workflow nota→ticket
 ├── mcp-vikunja/              # MCP server Python (FastMCP)
 │   ├── src/server.py         # servidor con tools de tickets
-│   ├── pyproject.toml
+│   ├── pyproject.toml        # requiere python >=3.12, uv para gestión
 │   └── README.md
 ├── scripts/
 │   ├── bootstrap.sh          # setup inicial
@@ -81,20 +93,41 @@ homestack/
 └── docs/                     # 7 guías (Podman, SES, tunnel, Umami, troubleshooting, glosario, Ollama)
 ```
 
+### Nota sobre SOPS
+`.sops.yaml` existe como placeholder pero **no está configurado ni es necesario**. Proyecto personal en solitario: `compose/.env` gitignored es suficiente. No sugerir SOPS a menos que Diego lo pida explícitamente.
+
 ## Estado actual / pendientes
 
 Lo que está HECHO:
 - Repo completo generado (compose, terraform, scripts, docs)
+- Makefile con todos los comandos operacionales (`make help`)
 - MCP server de Vikunja funcional (Python/FastMCP)
 - Workflow n8n de ejemplo (nota → Ollama clasifica → Vikunja crea ticket)
+- MCP Vikunja: decisión tomada → **stdio local** (Claude Code en el Mac mini)
 
-Lo que FALTA (tareas para Cowork):
-1. **Reemplazar `tudominio.com`** por el dominio real en todo el repo (Diego va a comprar uno en Cloudflare Registrar). Find/replace global.
+Lo que FALTA:
+1. **Reemplazar `tudominio.com`** por el dominio real en todo el repo (Diego va a comprar uno en Cloudflare Registrar). `make` no funciona hasta resolver esto.
 2. **Probar el MCP server** contra una instancia real de Vikunja (ajustar si la API cambió).
 3. **Ajustar el `projectMap`** del workflow n8n con los IDs reales de proyectos de Vikunja una vez creados.
-4. **Verificar imágenes ARM64** de Postiz y Vikunja antes de desplegar (`docker manifest inspect`).
-5. **Salir del SES sandbox** (trámite AWS de 24-48h).
-6. Decidir si conectar el MCP de Vikunja vía stdio (Cowork local) o HTTP (remoto por el tunnel).
+4. **Verificar imágenes ARM64** (`make check-images-arm`) de Postiz y Vikunja antes de desplegar.
+5. **Salir del SES sandbox** (trámite AWS de 24-48h, solo 1 vez).
+6. **Configurar Beszel agent key** — se obtiene del UI de Beszel tras el primer `make up`, luego editar `docker-compose.yml` con el valor real.
+
+## Checklist primer arranque (orden obligatorio)
+
+```
+1. Comprar dominio en Cloudflare Registrar
+2. Find/replace 'tudominio.com' → dominio real en todo el repo
+3. cp .env.example compose/.env  →  llenar todos los valores (make gen-secrets ayuda)
+4. cd terraform/cloudflare && terraform init && terraform apply
+5. cd terraform/aws && terraform init && terraform apply
+6. bash scripts/bootstrap.sh
+7. make up
+8. Abrir Beszel UI → agregar sistema → copiar key → actualizar beszel-agent en compose
+9. make restart-svc SVC=beszel-agent
+10. Crear cuenta en Vikunja (tasks.<dominio>) → deshabilitar registro (VIKUNJA_SERVICE_ENABLEREGISTRATION=false)
+11. Probar MCP server: make mcp-install && make mcp-run
+```
 
 ## Perfil de Diego (para calibrar respuestas)
 
@@ -105,10 +138,43 @@ Lo que FALTA (tareas para Cowork):
 - Negocio de fotografía: FOTOGRAMIA (photobooth de fin de semana).
 - Estudiando para AWS DOP-C02.
 
+## MCP Vikunja — configuración Claude Code (stdio)
+
+Agregar en `~/.claude/claude_desktop_config.json` (o config de Claude Code):
+
+```json
+{
+  "mcpServers": {
+    "vikunja": {
+      "command": "uv",
+      "args": ["run", "--directory", "/ruta/a/homestack/mcp-vikunja", "python", "src/server.py"],
+      "env": {
+        "VIKUNJA_URL": "https://tasks.<dominio>",
+        "VIKUNJA_TOKEN": "<api-token-de-vikunja>"
+      }
+    }
+  }
+}
+```
+
+Obtener `VIKUNJA_TOKEN`: Vikunja UI → Settings → API Tokens → crear token.
+
+## Herramientas requeridas
+
+| Herramienta | Versión mínima | Uso |
+|---|---|---|
+| podman / podman-compose | 5.x / 1.x | orquestación containers |
+| terraform | >=1.9 | infra AWS + Cloudflare |
+| python | >=3.12 | MCP server Vikunja |
+| uv | latest | gestor deps Python |
+| restic | >=0.16 | backups |
+| age / sops | — | **no requerido** (ver nota SOPS) |
+
 ## Convenciones
 
 - Idioma: español.
-- Secretos: nunca en texto plano en git. Usar SOPS+age o `.env` (gitignored).
-- Generar passwords con `openssl rand`.
-- Limits de RAM explícitos en cada container (16GB es el techo).
-- Al agregar un servicio nuevo: (1) compose, (2) DB en init SQL si aplica, (3) DNS en terraform/cloudflare/variables.tf, (4) Homepage, (5) backup.sh.
+- Secretos: `compose/.env` gitignored. Nunca commitear credenciales.
+- Generar passwords con `openssl rand` o `make gen-secrets`.
+- Limits de RAM explícitos en cada container (16 GB es el techo).
+- Al agregar un servicio nuevo: (1) compose, (2) DB en init SQL si aplica, (3) DNS en terraform/cloudflare/variables.tf, (4) Homepage widget, (5) backup.sh incluir volumen, (6) sumar RAM a la tabla del stack.
+- Comandos del día a día vía `make`. Ver `make help` para lista completa.
