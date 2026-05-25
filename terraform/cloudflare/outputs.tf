@@ -4,6 +4,7 @@
 
 output "service_urls" {
   description = "URLs públicas configuradas"
+  sensitive   = true
   value = {
     for subdomain, _ in var.services :
     subdomain => "https://${subdomain}.${var.domain}"

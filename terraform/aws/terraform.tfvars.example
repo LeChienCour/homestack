@@ -7,5 +7,5 @@
 # El Makefile tiene el target `tf-aws-env` para recordarte qué exportar.
 
 aws_region            = "us-east-1"
-aws_profile           = "homestack"      # perfil en ~/.aws/credentials
+aws_profile           = "admin"          # perfil en ~/.aws/credentials
 from_email_local_part = "noreply"
