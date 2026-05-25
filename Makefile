@@ -166,19 +166,36 @@ restore: ## Restaura desde backup: make restore SNAPSHOT=latest
 	SNAPSHOT=$${SNAPSHOT:-latest} bash scripts/restore.sh
 
 # =============================================================================
+# TERRAFORM — Bootstrap (S3 state bucket — correr UNA SOLA VEZ)
+# =============================================================================
+
+.PHONY: tf-bootstrap
+tf-bootstrap: ## Crea el S3 bucket para Terraform state (correr antes que todo)
+	cd terraform/bootstrap && terraform init && terraform apply
+
+# =============================================================================
 # TERRAFORM — AWS (SES + IAM)
 # =============================================================================
+
+.PHONY: tf-aws-env
+tf-aws-env: ## Muestra las variables de entorno necesarias para terraform/aws
+	@printf "$(BOLD)Exporta antes de correr terraform/aws:$(RESET)\n"
+	@printf "  export TF_VAR_domain=\"tudominio.com\"\n"
+	@printf "\nVerifica que el AWS profile 'homestack' exista:\n"
+	@printf "  aws configure list --profile homestack\n"
 
 .PHONY: tf-aws-init
 tf-aws-init: ## terraform init en terraform/aws
 	cd $(TF_AWS) && terraform init
 
 .PHONY: tf-aws-plan
-tf-aws-plan: ## terraform plan en terraform/aws
+tf-aws-plan: ## terraform plan en terraform/aws (requiere TF_VAR_domain)
+	@test -n "$$TF_VAR_domain" || (printf "$(BOLD)ERROR:$(RESET) exporta TF_VAR_domain primero. Ver: make tf-aws-env\n" && exit 1)
 	cd $(TF_AWS) && terraform plan
 
 .PHONY: tf-aws-apply
-tf-aws-apply: ## terraform apply en terraform/aws
+tf-aws-apply: ## terraform apply en terraform/aws (requiere TF_VAR_domain)
+	@test -n "$$TF_VAR_domain" || (printf "$(BOLD)ERROR:$(RESET) exporta TF_VAR_domain primero. Ver: make tf-aws-env\n" && exit 1)
 	cd $(TF_AWS) && terraform apply
 
 .PHONY: tf-aws-output
@@ -192,19 +209,32 @@ tf-aws-destroy: ## ⚠️  terraform destroy en terraform/aws
 	cd $(TF_AWS) && terraform destroy
 
 # =============================================================================
-# TERRAFORM — Cloudflare (DNS + Tunnel)
+# TERRAFORM — Cloudflare (DNS records — tunnel pre-existente)
 # =============================================================================
+
+.PHONY: tf-cf-env
+tf-cf-env: ## Muestra las variables de entorno necesarias para terraform/cloudflare
+	@printf "$(BOLD)Exporta antes de correr terraform/cloudflare:$(RESET)\n"
+	@printf "  export TF_VAR_domain=\"tudominio.com\"\n"
+	@printf "  export TF_VAR_cloudflare_api_token=\"tu-token-cf\"\n"
+	@printf "  export TF_VAR_cloudflare_account_id=\"tu-account-id\"\n"
+	@printf "\nToken CF necesita permisos: Zone:DNS:Edit\n"
+	@printf "Account ID: visible en la URL del dashboard de Cloudflare\n"
 
 .PHONY: tf-cf-init
 tf-cf-init: ## terraform init en terraform/cloudflare
 	cd $(TF_CF) && terraform init
 
 .PHONY: tf-cf-plan
-tf-cf-plan: ## terraform plan en terraform/cloudflare
+tf-cf-plan: ## terraform plan en terraform/cloudflare (requiere TF_VAR_*)
+	@test -n "$$TF_VAR_domain" || (printf "$(BOLD)ERROR:$(RESET) exporta variables primero. Ver: make tf-cf-env\n" && exit 1)
+	@test -n "$$TF_VAR_cloudflare_api_token" || (printf "$(BOLD)ERROR:$(RESET) exporta TF_VAR_cloudflare_api_token. Ver: make tf-cf-env\n" && exit 1)
 	cd $(TF_CF) && terraform plan
 
 .PHONY: tf-cf-apply
-tf-cf-apply: ## terraform apply en terraform/cloudflare
+tf-cf-apply: ## terraform apply en terraform/cloudflare (requiere TF_VAR_*)
+	@test -n "$$TF_VAR_domain" || (printf "$(BOLD)ERROR:$(RESET) exporta variables primero. Ver: make tf-cf-env\n" && exit 1)
+	@test -n "$$TF_VAR_cloudflare_api_token" || (printf "$(BOLD)ERROR:$(RESET) exporta TF_VAR_cloudflare_api_token. Ver: make tf-cf-env\n" && exit 1)
 	cd $(TF_CF) && terraform apply
 
 .PHONY: tf-cf-output
@@ -212,8 +242,8 @@ tf-cf-output: ## Muestra outputs de terraform/cloudflare
 	cd $(TF_CF) && terraform output
 
 .PHONY: tf-cf-destroy
-tf-cf-destroy: ## ⚠️  terraform destroy en terraform/cloudflare
-	@printf "$(BOLD)ADVERTENCIA:$(RESET) Esto elimina DNS y tunnel en Cloudflare.\n"
+tf-cf-destroy: ## ⚠️  terraform destroy en terraform/cloudflare (elimina DNS records)
+	@printf "$(BOLD)ADVERTENCIA:$(RESET) Esto elimina todos los DNS records gestionados por TF.\n"
 	@read -p "¿Confirmar? [y/N] " ans && [ "$$ans" = "y" ]
 	cd $(TF_CF) && terraform destroy
 

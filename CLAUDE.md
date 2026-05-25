@@ -106,8 +106,7 @@ Lo que está HECHO:
 - MCP Vikunja: decisión tomada → **stdio local** (Claude Code en el Mac mini)
 
 Lo que FALTA:
-1. **Reemplazar `tudominio.com`** por el dominio real en todo el repo (Diego va a comprar uno en Cloudflare Registrar). `make` no funciona hasta resolver esto.
-2. **Probar el MCP server** contra una instancia real de Vikunja (ajustar si la API cambió).
+1. **Probar el MCP server** contra una instancia real de Vikunja (ajustar si la API cambió).
 3. **Ajustar el `projectMap`** del workflow n8n con los IDs reales de proyectos de Vikunja una vez creados.
 4. **Verificar imágenes ARM64** (`make check-images-arm`) de Postiz y Vikunja antes de desplegar.
 5. **Salir del SES sandbox** (trámite AWS de 24-48h, solo 1 vez).
@@ -116,7 +115,7 @@ Lo que FALTA:
 ## Checklist primer arranque (orden obligatorio)
 
 ```
-1. Comprar dominio en Cloudflare Registrar
+1. Comprar dominio y apuntar NS a Cloudflare
 2. Find/replace 'tudominio.com' → dominio real en todo el repo
 3. cp .env.example compose/.env  →  llenar todos los valores (make gen-secrets ayuda)
 4. cd terraform/cloudflare && terraform init && terraform apply

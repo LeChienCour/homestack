@@ -7,17 +7,18 @@ variable "cloudflare_api_token" {
 variable "cloudflare_account_id" {
   description = "Account ID (visible en URL del dashboard de Cloudflare)"
   type        = string
+  sensitive   = true
 }
 
 variable "domain" {
-  description = "Dominio principal (ej. tudominio.com)"
+  description = "Dominio principal (ej. tudominio.com) — pasar via TF_VAR_domain, no en tfvars"
   type        = string
+  sensitive   = true
 }
 
-variable "tunnel_name" {
-  description = "Nombre del tunnel"
+variable "tunnel_id" {
+  description = "ID del tunnel existente en Cloudflare (Zero Trust > Networks > Tunnels)"
   type        = string
-  default     = "homestack-tunnel"
 }
 
 # Servicios a exponer. Key = subdominio, value = service interno
