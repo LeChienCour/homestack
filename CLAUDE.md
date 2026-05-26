@@ -104,28 +104,67 @@ Lo que está HECHO:
 - MCP server de Vikunja funcional (Python/FastMCP)
 - Workflow n8n de ejemplo (nota → Ollama clasifica → Vikunja crea ticket)
 - MCP Vikunja: decisión tomada → **stdio local** (Claude Code en el Mac mini)
+- Terraform refactorizado: S3 backend (`homestack-tf-state`), perfil AWS `admin`, secretos via env vars
+- Terraform Cloudflare: solo DNS CNAMEs (tunnel creado manualmente, no por TF)
+- S3 state bucket creado (`make tf-bootstrap` ejecutado)
+- Terraform AWS (SES) aplicado
+- Terraform Cloudflare (DNS) aplicado
+- Podman Machine recreada con `--volume /Volumes/Dock:/Volumes/Dock`
+- Socket path corregido a `/run/user/501/podman/podman.sock` en compose
+- `security_opt: label=disable` en traefik, dozzle, beszel-agent
+- Stack levantado: 12/14 containers running
+- cloudflared: 4 conexiones registradas al edge ✓
 
 Lo que FALTA:
-1. **Probar el MCP server** contra una instancia real de Vikunja (ajustar si la API cambió).
-3. **Ajustar el `projectMap`** del workflow n8n con los IDs reales de proyectos de Vikunja una vez creados.
-4. **Verificar imágenes ARM64** (`make check-images-arm`) de Postiz y Vikunja antes de desplegar.
-5. **Salir del SES sandbox** (trámite AWS de 24-48h, solo 1 vez).
-6. **Configurar Beszel agent key** — se obtiene del UI de Beszel tras el primer `make up`, luego editar `docker-compose.yml` con el valor real.
+1. **Configurar ingress rules del tunnel** — en CF Zero Trust → Public Hostnames, cada subdominio → `http://traefik:80`
+2. **Configurar Beszel agent key** — abrir metrics.dominio → Add System → copiar key → actualizar `docker-compose.yml` → `make restart-svc SVC=beszel-agent`
+3. **Probar el MCP server** contra instancia real de Vikunja
+4. **Ajustar `projectMap`** del workflow n8n con IDs reales de Vikunja
+5. **Salir del SES sandbox** (trámite AWS de 24-48h, solo 1 vez)
+6. **Instalar autoarranque Podman** — `bash scripts/install-podman-autostart.sh`
+7. **Deshabilitar registro de Vikunja** tras crear cuenta (`VIKUNJA_SERVICE_ENABLEREGISTRATION=false`)
+
+## Detalles de infraestructura (no obvios)
+
+### Podman Machine
+- VM creada con: `--cpus 5 --memory 6144 --disk-size 30 --volume /Volumes/Dock:/Volumes/Dock`
+- `vfkit` requerido: `brew install vfkit`
+- Socket rootless: `/run/user/501/podman/podman.sock` (UID 501)
+- SELinux en la VM: requiere `security_opt: [label=disable]` en containers que usan el socket
+
+### Terraform
+- Perfil AWS: `admin` (no "homestack")
+- S3 backend bucket: `homestack-tf-state` (region us-east-1)
+- State files: `cloudflare/terraform.tfstate` y `aws/terraform.tfstate`
+- Secrets via env vars: `TF_VAR_domain`, `TF_VAR_cloudflare_api_token`, `TF_VAR_cloudflare_account_id`, `TF_VAR_tunnel_id`
+- ⚠️ Dominio NUNCA en archivos committed. Solo en `.env` (gitignored) y variables de shell.
+
+### Cloudflare Tunnel
+- Tunnel creado manualmente en CF Zero Trust (no por Terraform)
+- Tunnel ID (UUID) ≠ Tunnel Token (base64 ~180 chars)
+- Token va en `compose/.env` → `CLOUDFLARE_TUNNEL_TOKEN`
+- Ingress rules configuradas en CF Zero Trust → Public Hostnames (no en terraform)
 
 ## Checklist primer arranque (orden obligatorio)
 
 ```
 1. Comprar dominio y apuntar NS a Cloudflare
-2. Find/replace 'tudominio.com' → dominio real en todo el repo
-3. cp .env.example compose/.env  →  llenar todos los valores (make gen-secrets ayuda)
-4. cd terraform/cloudflare && terraform init && terraform apply
-5. cd terraform/aws && terraform init && terraform apply
-6. bash scripts/bootstrap.sh
-7. make up
-8. Abrir Beszel UI → agregar sistema → copiar key → actualizar beszel-agent en compose
-9. make restart-svc SVC=beszel-agent
-10. Crear cuenta en Vikunja (tasks.<dominio>) → deshabilitar registro (VIKUNJA_SERVICE_ENABLEREGISTRATION=false)
-11. Probar MCP server: make mcp-install && make mcp-run
+2. brew install podman podman-compose vfkit terraform restic
+3. podman machine init --cpus 5 --memory 6144 --disk-size 30 --volume /Volumes/Dock:/Volumes/Dock
+4. podman machine start
+5. cp .env.example compose/.env  →  llenar todos los valores (make gen-secrets ayuda)
+6. make tf-bootstrap   (crea bucket S3 para state)
+7. export TF_VAR_domain=... TF_VAR_cloudflare_api_token=... TF_VAR_cloudflare_account_id=... TF_VAR_tunnel_id=...
+8. make tf-aws-apply
+9. make tf-cf-apply
+10. En CF Zero Trust → crear tunnel → copiar token → pegar en compose/.env → anotar Tunnel ID
+11. En CF Zero Trust → Public Hostnames → agregar cada subdominio apuntando a http://traefik:80
+12. make up
+13. Abrir Beszel UI → agregar sistema → copiar key → actualizar beszel-agent en compose
+14. make restart-svc SVC=beszel-agent
+15. Crear cuenta en Vikunja → deshabilitar registro (VIKUNJA_SERVICE_ENABLEREGISTRATION=false)
+16. Probar MCP server: make mcp-install && make mcp-run
+17. bash scripts/install-podman-autostart.sh
 ```
 
 ## Perfil de Diego (para calibrar respuestas)
@@ -163,7 +202,8 @@ Obtener `VIKUNJA_TOKEN`: Vikunja UI → Settings → API Tokens → crear token.
 | Herramienta | Versión mínima | Uso |
 |---|---|---|
 | podman / podman-compose | 5.x / 1.x | orquestación containers |
-| terraform | >=1.9 | infra AWS + Cloudflare |
+| vfkit | latest | Apple Hypervisor para Podman Machine (ARM) |
+| terraform | >=1.10 | infra AWS + Cloudflare (S3 lockfile nativo) |
 | python | >=3.12 | MCP server Vikunja |
 | uv | latest | gestor deps Python |
 | restic | >=0.16 | backups |

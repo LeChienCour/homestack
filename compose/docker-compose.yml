@@ -38,6 +38,8 @@ services:
     image: traefik:v3.2
     container_name: traefik
     restart: unless-stopped
+    security_opt:
+      - label=disable
     deploy:
       resources:
         limits:
@@ -58,7 +60,7 @@ services:
       # Cloudflared se conecta internamente.
       - "127.0.0.1:8080:8080"  # Dashboard Traefik
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /run/user/501/podman/podman.sock:/var/run/docker.sock:ro
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
       - traefik_data:/data
@@ -369,25 +371,29 @@ services:
     image: henrygd/beszel-agent:latest
     container_name: beszel-agent
     restart: unless-stopped
+    security_opt:
+      - label=disable
     network_mode: host
     environment:
       PORT: 45876
       KEY: "configurar-despues-en-ui"  # Se obtiene del UI de Beszel al agregar el sistema
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /run/user/501/podman/podman.sock:/var/run/docker.sock:ro
 
   # Dozzle: logs en tiempo real de todos los containers
   dozzle:
     image: amir20/dozzle:latest
     container_name: dozzle
     restart: unless-stopped
+    security_opt:
+      - label=disable
     networks:
       - proxy
     environment:
       DOZZLE_NO_ANALYTICS: "true"
       TZ: ${TZ}
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /run/user/501/podman/podman.sock:/var/run/docker.sock:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.dozzle.rule=Host(`logs.${DOMAIN}`)"

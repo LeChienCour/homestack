@@ -7,21 +7,22 @@ Podman es como Docker pero sin el "daemon" centralizado. En Mac corre dentro de 
 ## Instalación
 
 ```bash
-# Si no tienes Homebrew:
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# Instalar Podman + tooling
-brew install podman podman-compose
+brew install podman podman-compose vfkit
 ```
+
+> ⚠️ **`vfkit` es obligatorio** para el Apple Hypervisor que usa Podman en Apple Silicon. Sin él la VM no arranca.
 
 ## Inicializar Podman Machine
 
+El repo vive en `/Volumes/Dock`. La VM **no tiene acceso a volumes externos** por defecto — el flag `--volume` solo funciona en `machine init`, no después.
+
 ```bash
-# Crear la VM con recursos adecuados para tu Mac mini de 16GB
+# Crear la VM con acceso a /Volumes/Dock
 podman machine init \
-  --cpus 4 \
-  --memory 8192 \
-  --disk-size 80
+  --cpus 5 \
+  --memory 6144 \
+  --disk-size 30 \
+  --volume /Volumes/Dock:/Volumes/Dock
 
 # Arrancar
 podman machine start
@@ -31,44 +32,47 @@ podman info
 podman version
 ```
 
-**Importante:** los 8GB de la VM compiten con macOS. Si notas tu Mac lento, puedes bajar a 6GB:
-```bash
-podman machine stop
-podman machine set --memory 6144
-podman machine start
+> ⚠️ Si ya tienes una VM sin el `--volume`, debes recrearla:
+> ```bash
+> podman machine stop
+> podman machine rm podman-machine-default
+> # luego re-ejecutar el init de arriba
+> ```
+
+**Nota de recursos:** 6 GB RAM para la VM. macOS + Ollama nativo usan el resto de los 16 GB. No subir la VM a más de 8 GB.
+
+## Socket rootless
+
+El socket de Podman en modo rootless está en:
 ```
+/run/user/501/podman/podman.sock
+```
+
+Los containers que necesitan el socket (Traefik, Dozzle, Beszel agent) lo montan como:
+```yaml
+volumes:
+  - /run/user/501/podman/podman.sock:/var/run/docker.sock:ro
+security_opt:
+  - label=disable   # necesario para SELinux dentro de la VM
+```
+
+> **No usar** `/var/run/docker.sock` ni `/tmp/podman.sock` — esas rutas no existen en rootless.
 
 ## Configurar arranque automático
 
-Para que Podman Machine arranque sola al encender el Mac mini:
+Podman Machine no arranca sola al reiniciar el Mac. Instalar el Launch Agent incluido en el repo:
 
 ```bash
-# Crear LaunchAgent
-mkdir -p ~/Library/LaunchAgents
-cat > ~/Library/LaunchAgents/com.diego.podman.plist <<'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.diego.podman</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/opt/homebrew/bin/podman</string>
-        <string>machine</string>
-        <string>start</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/tmp/podman.log</string>
-    <key>StandardErrorPath</key>
-    <string>/tmp/podman.err</string>
-</dict>
-</plist>
-EOF
+# Instala el plist en ~/Library/LaunchAgents y lo activa
+bash scripts/install-podman-autostart.sh
+```
 
-launchctl load ~/Library/LaunchAgents/com.diego.podman.plist
+El script `scripts/start-podman-machine.sh` espera hasta 60 segundos a que `/Volumes/Dock` esté montado antes de iniciar la VM (importante si el disco USB demora en montarse).
+
+Verificar que está activo:
+```bash
+launchctl list | grep homestack
+# debe aparecer com.homestack.podman-machine
 ```
 
 ## Configurar Mac mini como servidor
@@ -79,19 +83,6 @@ sudo pmset -a sleep 0 disablesleep 1 womp 1 autorestart 1
 
 # Verificar
 pmset -g
-```
-
-## Compatibilidad con Docker
-
-Podman expone la misma API que Docker. Si una herramienta espera Docker:
-
-```bash
-# Crear alias permanente
-echo 'alias docker=podman' >> ~/.zshrc
-
-# Exponer socket Docker-compatible (para apps como Beszel que lo necesitan)
-podman system service --time=0 unix:///tmp/podman.sock &
-export DOCKER_HOST=unix:///tmp/podman.sock
 ```
 
 ## Comandos básicos
@@ -108,10 +99,18 @@ podman system prune          # Limpiar basura
 
 ## Verificación final
 
-Si todo está bien, deberías poder correr:
-
 ```bash
 podman run --rm hello-world
 ```
 
-Y ver `Hello from Docker!` (sí, dice Docker, es la imagen de prueba estándar).
+Debe mostrar `Hello from Docker!`.
+
+## Troubleshooting rápido
+
+| Error | Causa | Fix |
+|---|---|---|
+| `vfkit: command not found` | vfkit no instalado | `brew install vfkit` |
+| `statfs /private/var/run/docker.sock: no such file or directory` | Socket path incorrecto | Usar `/run/user/501/podman/podman.sock` |
+| `statfs /Volumes/Dock: no such file or directory` | Volumen no compartido con VM | Recrear VM con `--volume /Volumes/Dock:/Volumes/Dock` |
+| `permission denied` al leer socket | SELinux bloquea | Agregar `security_opt: [label=disable]` |
+| SSH timeout al `machine start` | vfkit no está / VM tardó | Esperar 30s, reintentar `machine start` |
