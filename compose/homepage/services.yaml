@@ -1,50 +1,50 @@
 ---
-# Lista de servicios. Reemplaza tudominio.com por tu dominio real.
+# Lista de servicios. Reemplaza dsandoval.dev por tu dominio real.
 
 - Productividad:
     - n8n:
-        href: https://n8n.tudominio.com
+        href: https://n8n.dsandoval.dev
         description: Automatización de flujos
         icon: n8n.png
 
     - Vikunja:
-        href: https://tasks.tudominio.com
+        href: https://tasks.dsandoval.dev
         description: Tickets y proyectos
         icon: vikunja.png
 
     - Vaultwarden:
-        href: https://vault.tudominio.com
+        href: https://vault.dsandoval.dev
         description: Gestor de contraseñas
         icon: vaultwarden.png
 
     - Docuseal:
-        href: https://sign.tudominio.com
+        href: https://sign.dsandoval.dev
         description: Firma electrónica
         icon: docuseal.png
 
 - Marketing:
     - Listmonk:
-        href: https://mail.tudominio.com
+        href: https://mail.dsandoval.dev
         description: Email marketing
         icon: listmonk.png
 
     - Postiz:
-        href: https://social.tudominio.com
+        href: https://social.dsandoval.dev
         description: Gestión redes sociales
         icon: postiz.png
 
 - Observabilidad:
     - Umami:
-        href: https://stats.tudominio.com
+        href: https://stats.dsandoval.dev
         description: Web analytics
         icon: umami.png
 
     - Beszel:
-        href: https://metrics.tudominio.com
+        href: https://metrics.dsandoval.dev
         description: Métricas del stack
         icon: beszel.png
 
     - Dozzle:
-        href: https://logs.tudominio.com
+        href: https://logs.dsandoval.dev
         description: Logs en tiempo real
         icon: dozzle.png
