@@ -33,16 +33,17 @@ Terraform **NO crea el tunnel** — solo gestiona los DNS CNAMEs. El tunnel se c
 
 ## Configurar ingress rules (hostnames públicos)
 
-El tunnel debe saber a dónde reenviar cada hostname. En Cloudflare Zero Trust:
+Las ingress rules se gestionan via **Terraform** (`tunnel_config.tf`) — no en el dashboard.  
+El resource `cloudflare_tunnel_config` reutiliza el mismo `services` map que los DNS CNAMEs.
 
-1. Tunnels → tu tunnel → **Public Hostname** → Add a public hostname
-2. Para **cada servicio**, agregar:
-   - Subdomain: `home`, `n8n`, `mail`, etc.
-   - Domain: `tudominio.com`
-   - Service: `http://traefik:80`
-3. Repetir para todos los subdominios (home, n8n, mail, sign, social, vault, stats, tasks, metrics, logs)
+```bash
+make tf-cf-apply   # aplica DNS CNAMEs + tunnel ingress en un solo paso
+```
 
-> Sin esto el tunnel responde `404` en todos los hostnames aunque esté conectado.
+Terraform configura automáticamente: por cada subdominio en `var.services` crea una regla  
+`hostname = subdominio.dominio → service = http://traefik:80`, más un catch-all `http_status:404`.
+
+> **No configurar Public Hostnames manualmente en el dashboard** — Terraform sobreescribirá esos cambios en el próximo apply.
 
 ## Setup de DNS con Terraform
 

@@ -21,9 +21,11 @@ variable "tunnel_id" {
   type        = string
 }
 
-# Servicios a exponer. Key = subdominio, value = service interno
+# Servicios a exponer.
+# Key   = subdominio  → usado en DNS CNAME + tunnel ingress hostname
+# Value = service     → backend al que cloudflared enruta (siempre Traefik)
 variable "services" {
-  description = "Mapa de subdominio → backend interno (Traefik routea por host)"
+  description = "Mapa de subdominio → backend interno. Usado para DNS CNAMEs y tunnel ingress rules."
   type        = map(string)
   default = {
     "home"    = "http://traefik:80"

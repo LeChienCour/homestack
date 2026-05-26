@@ -116,7 +116,7 @@ Lo que está HECHO:
 - cloudflared: 4 conexiones registradas al edge ✓
 
 Lo que FALTA:
-1. **Configurar ingress rules del tunnel** — en CF Zero Trust → Public Hostnames, cada subdominio → `http://traefik:80`
+1. **Aplicar `cloudflare_tunnel_config`** — `make tf-cf-apply` configura las ingress rules del tunnel via Terraform (ya no es manual)
 2. **Configurar Beszel agent key** — abrir metrics.dominio → Add System → copiar key → actualizar `docker-compose.yml` → `make restart-svc SVC=beszel-agent`
 3. **Probar el MCP server** contra instancia real de Vikunja
 4. **Ajustar `projectMap`** del workflow n8n con IDs reales de Vikunja

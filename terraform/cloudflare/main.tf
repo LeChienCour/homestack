@@ -1,9 +1,9 @@
 # =============================================================================
-# Terraform — Cloudflare DNS + Ingress (tunnel pre-existente)
+# Terraform — Cloudflare DNS + Tunnel Ingress (tunnel pre-existente)
 # =============================================================================
-# Este módulo NO crea el tunnel — solo gestiona DNS records.
-# El tunnel se crea una vez manualmente en Zero Trust > Networks > Tunnels.
-# Pasar el tunnel ID como variable `tunnel_id`.
+# Este módulo NO crea el tunnel — gestiona DNS records + ingress rules.
+# El tunnel se crea UNA SOLA VEZ manualmente en Zero Trust > Networks > Tunnels.
+# Pasar el tunnel ID como TF_VAR_tunnel_id.
 
 terraform {
   required_version = ">= 1.10.0"

@@ -376,7 +376,7 @@ services:
     network_mode: host
     environment:
       PORT: 45876
-      KEY: "configurar-despues-en-ui"  # Se obtiene del UI de Beszel al agregar el sistema
+      KEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILnp2ZtjdLnPXZi/ZIzyQu5WWz8MfFi3EazG8xRv0xhA"  # Se obtiene del UI de Beszel al agregar el sistema
     volumes:
       - /run/user/501/podman/podman.sock:/var/run/docker.sock:ro
 
