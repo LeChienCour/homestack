@@ -344,7 +344,7 @@ services:
       HOMEPAGE_ALLOWED_HOSTS: home.${DOMAIN}
       TZ: ${TZ}
     volumes:
-      - ./homepage:/app/config:ro
+      - ./homepage:/app/config
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.homepage.rule=Host(`home.${DOMAIN}`)"
