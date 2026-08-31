@@ -1,50 +1,53 @@
 ---
-# Lista de servicios. Reemplaza dsandoval.dev por tu dominio real.
-
 - Productividad:
     - n8n:
-        href: https://n8n.dsandoval.dev
+        href: https://n8n.{{HOMEPAGE_VAR_DOMAIN}}
         description: Automatización de flujos
         icon: n8n.png
 
     - Vikunja:
-        href: https://tasks.dsandoval.dev
+        href: https://tasks.{{HOMEPAGE_VAR_DOMAIN}}
         description: Tickets y proyectos
         icon: vikunja.png
 
     - Vaultwarden:
-        href: https://vault.dsandoval.dev
+        href: https://vault.{{HOMEPAGE_VAR_DOMAIN}}
         description: Gestor de contraseñas
         icon: vaultwarden.png
 
     - Docuseal:
-        href: https://sign.dsandoval.dev
+        href: https://sign.{{HOMEPAGE_VAR_DOMAIN}}
         description: Firma electrónica
         icon: docuseal.png
 
 - Marketing:
     - Listmonk:
-        href: https://mail.dsandoval.dev
+        href: https://mail.{{HOMEPAGE_VAR_DOMAIN}}
         description: Email marketing
         icon: listmonk.png
 
     - Postiz:
-        href: https://social.dsandoval.dev
+        href: https://social.{{HOMEPAGE_VAR_DOMAIN}}
         description: Gestión redes sociales
         icon: postiz.png
 
+    - SocialTrace:
+        href: https://track.{{HOMEPAGE_VAR_DOMAIN}}
+        description: Tracking manual de redes (FOTOGRAMIA)
+        icon: si-googleanalytics.png
+
 - Observabilidad:
     - Umami:
-        href: https://stats.dsandoval.dev
+        href: https://stats.{{HOMEPAGE_VAR_DOMAIN}}
         description: Web analytics
         icon: umami.png
 
     - Beszel:
-        href: https://metrics.dsandoval.dev
+        href: https://metrics.{{HOMEPAGE_VAR_DOMAIN}}
         description: Métricas del stack
         icon: beszel.png
 
     - Dozzle:
-        href: https://logs.dsandoval.dev
+        href: https://logs.{{HOMEPAGE_VAR_DOMAIN}}
         description: Logs en tiempo real
         icon: dozzle.png

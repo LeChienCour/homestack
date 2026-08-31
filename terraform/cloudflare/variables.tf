@@ -38,6 +38,7 @@ variable "services" {
     "tasks"   = "http://traefik:80"
     "metrics" = "http://traefik:80"
     "logs"    = "http://traefik:80"
+    "track"   = "http://traefik:80"
   }
 }
 

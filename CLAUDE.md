@@ -49,10 +49,24 @@ Stack personal self-hosted que corre en un **Mac mini Apple Silicon de 16GB RAM*
 | Homepage | home. | Dashboard | 50MB |
 | Beszel | metrics. | Monitoring | 50MB |
 | Dozzle | logs. | Logs en vivo | 20MB |
+| SocialTrace | track. | Tracking manual redes (FOTOGRAMIA) — repo hermano `../socialtrace` | 450MB |
 
-**RAM total containers ≈ 2.780 MB** (~2.7 GB). Con 16 GB en el Mac mini sobra margen. Antes de agregar servicio nuevo, verificar que la suma no supere ~12 GB (dejar 4 GB para macOS + Podman Machine + Ollama).
+**RAM total containers ≈ 3.230 MB** (~3.2 GB). Con 16 GB en el Mac mini sobra margen. Antes de agregar servicio nuevo, verificar que la suma no supere ~12 GB (dejar 4 GB para macOS + Podman Machine + Ollama).
 
 Externos: AWS SES (email), Ollama nativo (IA local), Cloudflare (DNS+tunnel), disco USB (backups).
+
+### SocialTrace — integración desde repo hermano
+
+Vive en `../socialtrace` (repo separado, no submódulo). Los 3 servicios
+(`socialtrace-backend`, `socialtrace-frontend`, `socialtrace-caddy`) se
+buildean en `compose/docker-compose.yml` con `build: ../../socialtrace/*`
+— requiere que ambos repos sean hermanos en el filesystem. Se conserva el
+Caddy propio del proyecto (routing interno `/api` → backend, resto →
+frontend) como único punto expuesto a Traefik; backend/frontend usan
+aliases de red (`backend`/`frontend`) porque el Caddyfile de socialtrace
+los referencia hardcodeados. DB `socialtrace` en el Postgres compartido
+(no Postgres propio). Sin backup sidecar propio — `backup.sh` de
+homestack ya cubre la DB vía `pg_dumpall`.
 
 ### Ollama — conectividad desde containers
 
@@ -127,10 +141,12 @@ Lo que FALTA:
 ## Detalles de infraestructura (no obvios)
 
 ### Podman Machine
-- VM creada con: `--cpus 5 --memory 6144 --disk-size 30 --volume /Volumes/Dock:/Volumes/Dock`
 - `vfkit` requerido: `brew install vfkit`
 - Socket rootless: `/run/user/501/podman/podman.sock` (UID 501)
 - SELinux en la VM: requiere `security_opt: [label=disable]` en containers que usan el socket
+- **La VM (applehv) NO tiene montado `/Volumes/Dock`** — solo comparte por defecto `/Users`, `/private`, `/var/folders`. `podman machine set` no admite agregar `--volume` a una VM ya creada (solo en `init`), y no se va a recrear la VM (perdería los volúmenes nombrados de otros stacks corriendo, ej. Atalaya). Por eso `traefik`, `postgres`, `homepage` y `temporal` NO usan bind mount para su config — la config se hornea en la imagen vía `build:` + Dockerfile propio (`compose/traefik/Dockerfile`, `compose/postgres/Dockerfile`, `compose/homepage/Dockerfile`, `compose/temporal/Dockerfile`). `podman build` sí funciona sin el mount porque el build-context se manda por la API (streaming), a diferencia de un bind mount que necesita que la VM vea la ruta del host directamente.
+- **Al editar `traefik.yml`, `traefik/dynamic/*`, `postgres/init/*.sql`, `homepage/*`, o `temporal/dynamicconfig/*`:** correr `make rebuild-configs` (rebuild + recreate de esos 4 containers) — un simple restart no basta, hay que rebuildear la imagen.
+- El resto de los servicios (n8n, vikunja, vaultwarden, etc.) no tienen este problema: usan solo volúmenes nombrados (viven dentro del disco de la VM) o `env`, no bind mounts a `/Volumes/Dock`.
 
 ### Terraform
 - Perfil AWS: `admin` (no "homestack")

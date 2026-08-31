@@ -61,6 +61,11 @@ update: pull ## pull + recrear containers con nuevas imágenes
 recreate: ## Fuerza recreación de todos los containers (sin pull)
 	$(DC) up -d --force-recreate
 
+.PHONY: rebuild-configs
+rebuild-configs: ## Rebuildea traefik/postgres/homepage/temporal tras editar su config (ver CLAUDE.md: config horneada, no bind mount)
+	$(DC) build traefik postgres homepage temporal
+	$(DC) up -d traefik postgres homepage temporal
+
 .PHONY: ps
 ps: ## Estado de todos los containers
 	$(DC) ps
@@ -319,3 +324,4 @@ gen-secrets: ## Genera passwords seguros para el .env (openssl rand)
 	@echo "UMAMI_APP_SECRET=$$(openssl rand -hex 32)"
 	@echo "VIKUNJA_JWT_SECRET=$$(openssl rand -hex 32)"
 	@echo "VAULTWARDEN_ADMIN_TOKEN=$$(openssl rand -base64 48)"
+	@echo "SOCIALTRACE_API_TOKEN=$$(openssl rand -hex 32)"
