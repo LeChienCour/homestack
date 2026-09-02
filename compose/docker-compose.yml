@@ -26,6 +26,8 @@ volumes:
   umami_data:
   beszel_data:
   vikunja_files:
+  opensearch_data:
+  homepage_logs:
 
 services:
 
@@ -35,9 +37,15 @@ services:
 
   # Traefik: reverse proxy. Recibe tráfico de cloudflared y lo enruta por hostname.
   traefik:
-    image: traefik:v3.2
+    build: ./traefik
     container_name: traefik
     restart: unless-stopped
+    security_opt:
+      - label=disable
+    deploy:
+      resources:
+        limits:
+          memory: 128m
     networks:
       - proxy
     command:
@@ -54,9 +62,7 @@ services:
       # Cloudflared se conecta internamente.
       - "127.0.0.1:8080:8080"  # Dashboard Traefik
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
-      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - /run/user/501/podman/podman.sock:/var/run/docker.sock:ro
       - traefik_data:/data
 
   # Cloudflared: tunnel a Cloudflare. Sin puertos abiertos en el Mac mini.
@@ -64,6 +70,10 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64m
     networks:
       - proxy
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
@@ -72,9 +82,13 @@ services:
 
   # Postgres compartido. Cada app tiene su propia DB.
   postgres:
-    image: postgres:16-alpine
+    build: ./postgres
     container_name: postgres
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
     networks:
       - internal
     environment:
@@ -83,7 +97,6 @@ services:
       POSTGRES_DB: postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 10s
@@ -95,6 +108,10 @@ services:
     image: redis:7-alpine
     container_name: redis
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256m   # --maxmemory 256mb ya configurado en command
     networks:
       - internal
     command: redis-server --requirepass ${REDIS_PASSWORD} --maxmemory 256mb --maxmemory-policy allkeys-lru
@@ -115,6 +132,10 @@ services:
     image: n8nio/n8n:latest
     container_name: n8n
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
     networks:
       - proxy
       - internal
@@ -127,6 +148,8 @@ services:
       N8N_HOST: n8n.${DOMAIN}
       N8N_PROTOCOL: https
       N8N_PORT: 5678
+      N8N_EDITOR_BASE_URL: https://n8n.${DOMAIN}
+      N8N_PROXY_HOPS: "1"
       WEBHOOK_URL: https://n8n.${DOMAIN}/
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
       N8N_USER_MANAGEMENT_JWT_SECRET: ${N8N_USER_MANAGEMENT_JWT_SECRET}
@@ -148,6 +171,10 @@ services:
     image: listmonk/listmonk:latest
     container_name: listmonk
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256m
     networks:
       - proxy
       - internal
@@ -199,10 +226,62 @@ services:
       - "traefik.http.services.docuseal.loadbalancer.server.port=3000"
 
   # Postiz: gestión de redes sociales (reemplaza Buffer)
+  # OpenSearch: advanced visibility para Temporal (requerido por Postiz)
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: opensearch
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+    networks:
+      - internal
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms256m -Xmx256m"
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+
+  # Temporal: workflow engine requerido por Postiz
+  temporal:
+    build: ./temporal
+    container_name: temporal
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    networks:
+      - internal
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PWD=${POSTGRES_PASSWORD}
+      - POSTGRES_SEEDS=postgres
+      - ENABLE_ES=true
+      - ES_SEEDS=opensearch
+      - ES_VERSION=v7
+      - ES_SCHEME=http
+      - ES_PORT=9200
+      - TEMPORAL_NAMESPACE=default
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+    depends_on:
+      postgres:
+        condition: service_healthy
+      opensearch:
+        condition: service_started
+
   postiz:
     image: ghcr.io/gitroomhq/postiz-app:latest
     container_name: postiz
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1536m
     networks:
       - proxy
       - internal
@@ -213,6 +292,8 @@ services:
       JWT_SECRET: ${POSTIZ_JWT_SECRET}
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/postiz
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      TEMPORAL_ADDRESS: temporal:7233
+      IS_GENERAL: "true"
       STORAGE_PROVIDER: local
       UPLOAD_DIRECTORY: /uploads
       NEXT_PUBLIC_UPLOAD_DIRECTORY: /uploads
@@ -224,6 +305,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      temporal:
+        condition: service_started
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.postiz.rule=Host(`social.${DOMAIN}`)"
@@ -303,22 +386,100 @@ services:
       - "traefik.http.routers.vikunja.entrypoints=web"
       - "traefik.http.services.vikunja.loadbalancer.server.port=3456"
 
+  # SocialTrace: tracking local-first de redes sociales (repo hermano ../socialtrace)
+  # Backend/frontend usan el Postgres compartido; caddy interno del proyecto
+  # se conserva para el routing /api → backend, resto → frontend, y es el
+  # único servicio expuesto a Traefik. No se usa el backup sidecar propio de
+  # socialtrace: backup.sh de homestack ya hace pg_dumpall de la DB socialtrace.
+  socialtrace-backend:
+    build: ../../socialtrace/backend
+    container_name: socialtrace-backend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    networks:
+      internal:
+        aliases:
+          - backend
+    environment:
+      SOCIALTRACE_POSTGRES_HOST: postgres
+      SOCIALTRACE_POSTGRES_PORT: "5432"
+      SOCIALTRACE_POSTGRES_DB: socialtrace
+      SOCIALTRACE_POSTGRES_USER: ${POSTGRES_USER}
+      SOCIALTRACE_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SOCIALTRACE_API_TOKEN: ${SOCIALTRACE_API_TOKEN}
+      SOCIALTRACE_ENVIRONMENT: production
+    command: ["sh", "-c", "alembic upgrade head && uvicorn socialtrace.main:app --host 0.0.0.0 --port 8000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/readyz')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  socialtrace-frontend:
+    build: ../../socialtrace/frontend
+    container_name: socialtrace-frontend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+    networks:
+      internal:
+        aliases:
+          - frontend
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  socialtrace-caddy:
+    build: ../../socialtrace/caddy
+    container_name: socialtrace-caddy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+    networks:
+      - proxy
+      - internal
+    depends_on:
+      socialtrace-backend:
+        condition: service_healthy
+      socialtrace-frontend:
+        condition: service_started
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.socialtrace.rule=Host(`track.${DOMAIN}`)"
+      - "traefik.http.routers.socialtrace.entrypoints=web"
+      - "traefik.http.services.socialtrace.loadbalancer.server.port=8080"
+
   # ---------------------------------------------------------------------------
   # OBSERVABILIDAD
   # ---------------------------------------------------------------------------
 
   # Homepage: dashboard único con todos los servicios
   homepage:
-    image: ghcr.io/gethomepage/homepage:latest
+    build: ./homepage
     container_name: homepage
     restart: unless-stopped
     networks:
       - proxy
     environment:
       HOMEPAGE_ALLOWED_HOSTS: home.${DOMAIN}
+      HOMEPAGE_VAR_DOMAIN: ${DOMAIN}
       TZ: ${TZ}
     volumes:
-      - ./homepage:/app/config:ro
+      - homepage_logs:/app/config/logs
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.homepage.rule=Host(`home.${DOMAIN}`)"
@@ -345,25 +506,29 @@ services:
     image: henrygd/beszel-agent:latest
     container_name: beszel-agent
     restart: unless-stopped
+    security_opt:
+      - label=disable
     network_mode: host
     environment:
       PORT: 45876
-      KEY: "configurar-despues-en-ui"  # Se obtiene del UI de Beszel al agregar el sistema
+      KEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILnp2ZtjdLnPXZi/ZIzyQu5WWz8MfFi3EazG8xRv0xhA"  # Se obtiene del UI de Beszel al agregar el sistema
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /run/user/501/podman/podman.sock:/var/run/docker.sock:ro
 
   # Dozzle: logs en tiempo real de todos los containers
   dozzle:
     image: amir20/dozzle:latest
     container_name: dozzle
     restart: unless-stopped
+    security_opt:
+      - label=disable
     networks:
       - proxy
     environment:
       DOZZLE_NO_ANALYTICS: "true"
       TZ: ${TZ}
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /run/user/501/podman/podman.sock:/var/run/docker.sock:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.dozzle.rule=Host(`logs.${DOMAIN}`)"

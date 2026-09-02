@@ -10,6 +10,7 @@ CREATE DATABASE docuseal;
 CREATE DATABASE postiz;
 CREATE DATABASE umami;
 CREATE DATABASE vikunja;
+CREATE DATABASE socialtrace;
 
 -- El usuario por defecto (POSTGRES_USER) ya tiene permisos completos
 -- sobre todas las DBs porque es el superuser definido al inicializar

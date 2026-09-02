@@ -2,13 +2,13 @@
 # DNS records — CNAMEs hacia el tunnel + DKIM/SPF de SES
 # =============================================================================
 
-# Un CNAME por cada subdominio → tunnel
+# Un CNAME por cada subdominio → tunnel existente
 resource "cloudflare_record" "service" {
   for_each = var.services
 
   zone_id = data.cloudflare_zone.main.id
   name    = each.key
-  content = "${cloudflare_tunnel.main.id}.cfargotunnel.com"
+  content = "${var.tunnel_id}.cfargotunnel.com"
   type    = "CNAME"
   proxied = true  # Pasa por Cloudflare (oculta IP, da SSL gratis)
   ttl     = 1     # Auto cuando proxied=true

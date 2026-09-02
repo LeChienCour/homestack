@@ -1,50 +1,53 @@
 ---
-# Lista de servicios. Reemplaza tudominio.com por tu dominio real.
-
 - Productividad:
     - n8n:
-        href: https://n8n.tudominio.com
+        href: https://n8n.{{HOMEPAGE_VAR_DOMAIN}}
         description: Automatización de flujos
         icon: n8n.png
 
     - Vikunja:
-        href: https://tasks.tudominio.com
+        href: https://tasks.{{HOMEPAGE_VAR_DOMAIN}}
         description: Tickets y proyectos
         icon: vikunja.png
 
     - Vaultwarden:
-        href: https://vault.tudominio.com
+        href: https://vault.{{HOMEPAGE_VAR_DOMAIN}}
         description: Gestor de contraseñas
         icon: vaultwarden.png
 
     - Docuseal:
-        href: https://sign.tudominio.com
+        href: https://sign.{{HOMEPAGE_VAR_DOMAIN}}
         description: Firma electrónica
         icon: docuseal.png
 
 - Marketing:
     - Listmonk:
-        href: https://mail.tudominio.com
+        href: https://mail.{{HOMEPAGE_VAR_DOMAIN}}
         description: Email marketing
         icon: listmonk.png
 
     - Postiz:
-        href: https://social.tudominio.com
+        href: https://social.{{HOMEPAGE_VAR_DOMAIN}}
         description: Gestión redes sociales
         icon: postiz.png
 
+    - SocialTrace:
+        href: https://track.{{HOMEPAGE_VAR_DOMAIN}}
+        description: Tracking manual de redes (FOTOGRAMIA)
+        icon: si-googleanalytics.png
+
 - Observabilidad:
     - Umami:
-        href: https://stats.tudominio.com
+        href: https://stats.{{HOMEPAGE_VAR_DOMAIN}}
         description: Web analytics
         icon: umami.png
 
     - Beszel:
-        href: https://metrics.tudominio.com
+        href: https://metrics.{{HOMEPAGE_VAR_DOMAIN}}
         description: Métricas del stack
         icon: beszel.png
 
     - Dozzle:
-        href: https://logs.tudominio.com
+        href: https://logs.{{HOMEPAGE_VAR_DOMAIN}}
         description: Logs en tiempo real
         icon: dozzle.png

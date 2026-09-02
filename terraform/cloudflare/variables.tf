@@ -7,22 +7,25 @@ variable "cloudflare_api_token" {
 variable "cloudflare_account_id" {
   description = "Account ID (visible en URL del dashboard de Cloudflare)"
   type        = string
+  sensitive   = true
 }
 
 variable "domain" {
-  description = "Dominio principal (ej. tudominio.com)"
+  description = "Dominio principal (ej. tudominio.com) — pasar via TF_VAR_domain, no en tfvars"
+  type        = string
+  sensitive   = true
+}
+
+variable "tunnel_id" {
+  description = "ID del tunnel existente en Cloudflare (Zero Trust > Networks > Tunnels)"
   type        = string
 }
 
-variable "tunnel_name" {
-  description = "Nombre del tunnel"
-  type        = string
-  default     = "homestack-tunnel"
-}
-
-# Servicios a exponer. Key = subdominio, value = service interno
+# Servicios a exponer.
+# Key   = subdominio  → usado en DNS CNAME + tunnel ingress hostname
+# Value = service     → backend al que cloudflared enruta (siempre Traefik)
 variable "services" {
-  description = "Mapa de subdominio → backend interno (Traefik routea por host)"
+  description = "Mapa de subdominio → backend interno. Usado para DNS CNAMEs y tunnel ingress rules."
   type        = map(string)
   default = {
     "home"    = "http://traefik:80"
@@ -35,6 +38,7 @@ variable "services" {
     "tasks"   = "http://traefik:80"
     "metrics" = "http://traefik:80"
     "logs"    = "http://traefik:80"
+    "track"   = "http://traefik:80"
   }
 }
 

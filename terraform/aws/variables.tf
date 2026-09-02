@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "aws_profile" {
   description = "Profile de AWS CLI configurado en ~/.aws/credentials"
   type        = string
-  default     = "homestack"
+  default     = "admin"
 }
 
 variable "domain" {

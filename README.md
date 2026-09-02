@@ -36,14 +36,15 @@ Disco USB externo (backups Restic, encriptados)
 
 Externos:
 - AWS SES → envío de emails (Listmonk)
+- Ollama nativo macOS → IA local (n8n workflows)
 ```
 
 ## Pre-requisitos
 
 1. **Mac mini Apple Silicon** con 16GB RAM, macOS Sonoma o superior
-2. **Dominio comprado** y agregado a Cloudflare (recomendado: Cloudflare Registrar)
-3. **Cuenta AWS** con permisos para crear IAM users, SES, Route53 (opcional)
-4. **Disco USB externo** (mínimo 100GB) montado permanentemente
+2. **Dominio** en Cloudflare (Registrar o transferido)
+3. **Cuenta AWS** con perfil `admin` configurado
+4. **Disco USB externo** montado en `/Volumes/HomestackBackups`
 5. **Homebrew** instalado
 
 ## Setup paso a paso
@@ -51,114 +52,171 @@ Externos:
 ### 1. Instalar herramientas
 
 ```bash
-# Tooling base
-brew install podman podman-compose terraform sops age cloudflared restic
+brew install podman podman-compose vfkit terraform restic
+```
 
-# Iniciar Podman Machine (la VM Linux ligera)
-podman machine init --cpus 4 --memory 8192 --disk-size 80
+> `vfkit` es obligatorio para el Apple Hypervisor en Apple Silicon.
+
+### 2. Inicializar Podman Machine
+
+> ⚠️ El repo debe estar en `/Volumes/Dock`. El flag `--volume` solo funciona en `machine init`.
+
+```bash
+podman machine init \
+  --cpus 5 \
+  --memory 6144 \
+  --disk-size 30 \
+  --volume /Volumes/Dock:/Volumes/Dock
+
 podman machine start
 ```
 
-### 2. Configurar AWS
-
-Crea un IAM user con acceso programático y políticas para SES + Route53 (si tu dominio está en Route53). Anota `AWS_ACCESS_KEY_ID` y `AWS_SECRET_ACCESS_KEY`.
+### 3. Configurar credenciales
 
 ```bash
-aws configure --profile homestack
+# AWS — perfil "admin" (no "homestack")
+aws configure --profile admin
+
+# Verificar
+aws sts get-caller-identity --profile admin
 ```
 
-### 3. Configurar Cloudflare
+### 4. Bootstrap del estado de Terraform (solo 1 vez)
 
-1. Compra dominio en Cloudflare Registrar (o transfiere uno existente).
-2. Crea un API token con permisos:
-   - `Zone:DNS:Edit` (para tu zona)
-   - `Account:Cloudflare Tunnel:Edit`
-3. Anota el token y el `Account ID` (visible en la URL del dashboard).
-
-### 4. Configurar SOPS para secretos
+Crea el bucket S3 que guarda el state de Terraform:
 
 ```bash
-# Generar llave age
-age-keygen -o ~/.config/sops/age/keys.txt
-
-# Anotar la clave pública (age1...) y configurar
-cat ~/.config/sops/age/keys.txt | grep "public key"
+make tf-bootstrap
 ```
 
-Edita `.sops.yaml` con tu clave pública.
-
-### 5. Crear archivo de variables
+### 5. Configurar el archivo de variables
 
 ```bash
-cp .env.example .env
-# Edita .env con tus valores reales
+cp .env.example compose/.env
+# Editar compose/.env con todos los valores reales
+# Generar passwords seguros:
+make gen-secrets
 ```
 
-### 6. Desplegar infraestructura con Terraform
+### 6. Crear tunnel de Cloudflare (manual, solo 1 vez)
+
+1. Cloudflare → Zero Trust → Networks → Tunnels → **Create a tunnel** → Cloudflared
+2. Nombre: `homestack-tunnel`
+3. Copiar el **Tunnel Token** (base64 largo ~180 chars) → pegar en `compose/.env` como `CLOUDFLARE_TUNNEL_TOKEN`
+4. Anotar el **Tunnel ID** (UUID, visible en la lista de tunnels)
+
+### 7. Desplegar DNS con Terraform
 
 ```bash
-cd terraform/aws
-terraform init
-terraform apply
+# Exportar secrets (NUNCA commitear)
+export TF_VAR_domain="tudominio.com"
+export TF_VAR_cloudflare_api_token="tu-api-token"
+export TF_VAR_cloudflare_account_id="tu-account-id"
+export TF_VAR_tunnel_id="uuid-del-tunnel"
 
-cd ../cloudflare
-terraform init
-terraform apply
-# Anota el TUNNEL_TOKEN del output, lo necesitas para el .env
+make tf-cf-apply
 ```
 
-### 7. Levantar el stack
+### 8. Desplegar SES con Terraform
 
 ```bash
-cd compose
-podman-compose up -d
+export TF_VAR_domain="tudominio.com"
+make tf-aws-apply
 ```
 
-### 8. Verificar
+### 9. Configurar ingress rules del tunnel
+
+En Cloudflare → Zero Trust → Tunnels → tu tunnel → **Public Hostname**, agregar para **cada servicio**:
+- Subdomain: `home` / `n8n` / `mail` / etc.
+- Domain: `tudominio.com`
+- Service: `http://traefik:80`
+
+### 10. Levantar el stack
 
 ```bash
-# Estado de containers
-podman ps
+make up
+```
 
-# Logs si algo falla
-podman logs <nombre-container>
+### 11. Verificar
 
-# Acceder a Homepage
+```bash
+make ps          # containers corriendo
+make logs        # logs en tiempo real
+
+# Acceder al dashboard
 open https://home.tudominio.com
+```
+
+### 12. Configurar Beszel Agent
+
+1. Abrir `https://metrics.tudominio.com` → Add System
+2. Copiar la **public key** que genera la UI
+3. Editar `compose/docker-compose.yml` → servicio `beszel-agent` → variable `KEY`
+4. `make restart-svc SVC=beszel-agent`
+
+## Comandos del día a día
+
+```bash
+make help          # lista completa de comandos
+make up            # levantar todos los servicios
+make down          # bajar todos
+make ps            # estado de containers
+make logs          # logs en vivo
+make restart-svc SVC=n8n   # reiniciar un servicio
+make pull          # actualizar imágenes
 ```
 
 ## Backups
 
-Los backups se hacen automáticamente cada noche a las 3:00 AM al disco USB externo. Ver `scripts/backup.sh` y `scripts/install-backup-cron.sh`.
+Los backups se hacen automáticamente cada noche a las 3:00 AM al disco USB. Ver `scripts/backup.sh`.
 
-Restore manual:
 ```bash
+# Instalar el cron
+bash scripts/install-backup-cron.sh
+
+# Restore manual
 ./scripts/restore.sh <snapshot-id>
+
+# Listar snapshots
+restic -r /Volumes/HomestackBackups/restic snapshots
 ```
+
+## Autoarranque de Podman Machine
+
+```bash
+bash scripts/install-podman-autostart.sh
+```
+
+El script espera a que `/Volumes/Dock` esté montado antes de iniciar la VM.
 
 ## Costo estimado mensual
 
 | Concepto | Costo USD |
 |---|---|
-| Dominio (.com Cloudflare) | $1 amortizado |
+| Dominio (.com Cloudflare Registrar) | $1 amortizado |
 | Cloudflare plan free | $0 |
 | AWS SES (10k emails/mes) | ~$1 |
 | Electricidad Mac mini 24/7 | ~$3-5 |
 | **Total** | **~$5-7** |
 
-vs. SaaS equivalentes que costarían **$150-200 USD/mes**.
+vs. SaaS equivalentes: **$150-200 USD/mes**.
 
 ## Documentación
 
-- [docs/01-setup-podman.md](docs/01-setup-podman.md) — Setup detallado de Podman en Mac
+- [docs/01-setup-podman.md](docs/01-setup-podman.md) — Setup de Podman en Mac (VM, socket, autoarranque)
 - [docs/02-aws-ses-config.md](docs/02-aws-ses-config.md) — Configuración SES paso a paso
 - [docs/03-cloudflare-tunnel.md](docs/03-cloudflare-tunnel.md) — Cloudflare Tunnel y DNS
 - [docs/04-umami-snippet.md](docs/04-umami-snippet.md) — Cómo agregar tracking a FOTOGRAMIA
-- [docs/05-troubleshooting.md](docs/05-troubleshooting.md) — Problemas comunes
+- [docs/05-troubleshooting.md](docs/05-troubleshooting.md) — Problemas comunes y soluciones
 - [docs/06-glossary.md](docs/06-glossary.md) — Glosario de términos
+- [docs/07-ollama-local-ai.md](docs/07-ollama-local-ai.md) — Ollama IA local + integración con n8n
 
 ## Mantenimiento
 
-- **Updates mensuales:** `podman-compose pull && podman-compose up -d`
-- **Restart Mac mini:** los containers se levantan automáticamente con systemd (Podman)
-- **Verificar backups:** `restic -r /Volumes/Backups/restic snapshots`
+```bash
+# Updates mensuales
+make pull && make up
+
+# Verificar backups
+restic -r /Volumes/HomestackBackups/restic snapshots
+```

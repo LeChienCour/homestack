@@ -1,13 +1,19 @@
 # Copia a terraform.tfvars y rellena.
-# Para los valores de SES, primero corre terraform en aws/ y trae los outputs.
+# IMPORTANTE: domain, cloudflare_api_token y cloudflare_account_id
+# se pasan como variables de entorno — NO los pongas en este archivo.
+#
+# Antes de correr terraform:
+#   export TF_VAR_domain="tudominio.com"
+#   export TF_VAR_cloudflare_api_token="tu-token"
+#   export TF_VAR_cloudflare_account_id="tu-account-id"
+#
+# El Makefile tiene el target `tf-cf-env` para recordarte qué exportar.
 
-cloudflare_api_token  = "tu-token-cloudflare"
-cloudflare_account_id = "tu-account-id"
-domain                = "tudominio.com"
+# ID del tunnel (Zero Trust > Networks > Tunnels > clic en tunnel > copiar ID)
+tunnel_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
 # Estos vienen del output de terraform/aws después de aplicar SES.
-# Ejemplo de cómo traerlos:
-#   cd ../aws && terraform output -json ses_dkim_tokens
+# Ejemplo: cd ../aws && terraform output -json ses_dkim_tokens
 ses_verification_token = ""
 ses_dkim_tokens        = []
 aws_region             = "us-east-1"

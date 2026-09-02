@@ -2,13 +2,7 @@
 
 ## ¿Qué es Cloudflare Tunnel?
 
-Es una forma de exponer tus servicios locales a internet **sin abrir puertos en tu router**. Tu Mac mini hace una conexión SALIENTE hacia Cloudflare, y Cloudflare actúa como proxy del tráfico entrante.
-
-**Sin Cloudflare Tunnel:**
-```
-Internet → router (puerto 80/443 abierto) → Mac mini
-           ⚠ Cualquiera puede atacarte directamente
-```
+Expone servicios locales a internet **sin abrir puertos en el router**. El Mac mini hace una conexión SALIENTE hacia Cloudflare; Cloudflare hace de proxy del tráfico entrante.
 
 **Con Cloudflare Tunnel:**
 ```
@@ -16,131 +10,134 @@ Internet → Cloudflare (WAF, DDoS, SSL) → tunnel cifrado ← Mac mini conecta
            ✓ Router sin puertos abiertos, IP oculta
 ```
 
-## Ventajas
+## Dos valores importantes — no confundirlos
 
-1. **Sin puertos abiertos**: tu router queda 100% cerrado
-2. **SSL automático**: Cloudflare provee certificados, no necesitas Let's Encrypt
-3. **Protección DDoS** y WAF incluidos en plan free
-4. **IP oculta**: tu IP residencial nunca se ve
-5. **Funciona detrás de CGNAT**: aunque tu ISP no te dé IP pública
+| Valor | Formato | Dónde se usa |
+|---|---|---|
+| **Tunnel ID** | UUID: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` | DNS CNAMEs, Terraform `tunnel_id` |
+| **Tunnel Token** | Base64 ~180 chars: `eyJhIjoiXXh...` | `.env` → `CLOUDFLARE_TUNNEL_TOKEN` |
 
-## Setup paso a paso
+> ⚠️ Son valores distintos. Poner el UUID en `.env` da error: `Provided Tunnel token is not valid`.
 
-### Paso 1 — Comprar dominio en Cloudflare Registrar
+## Setup del tunnel (hecho manualmente)
 
-1. Cloudflare → Domain Registration → Register Domain
-2. Buscar y comprar (precio de costo, sin markup)
-3. El dominio queda automáticamente en Cloudflare DNS
+Terraform **NO crea el tunnel** — solo gestiona los DNS CNAMEs. El tunnel se creó manualmente:
 
-### Paso 2 — Generar API Token
+1. Cloudflare Dashboard → Zero Trust → Networks → Tunnels → **Create a tunnel**
+2. Tipo: Cloudflared → nombre: `homestack-tunnel`
+3. Copiar el **token** (base64 largo, ~180 chars) → pegar en `compose/.env`:
+   ```
+   CLOUDFLARE_TUNNEL_TOKEN=eyJhIjoiXXh...token-largo
+   ```
+4. Copiar el **Tunnel ID** (UUID) → se usa en Terraform y se exporta como env var
 
-1. Cloudflare Dashboard → My Profile → API Tokens → Create Token
-2. Template: "Edit zone DNS" o custom con:
-   - `Zone:DNS:Edit` para tu zona
-   - `Account:Cloudflare Tunnel:Edit`
-3. Copiar el token (se muestra UNA SOLA VEZ)
+## Configurar ingress rules (hostnames públicos)
 
-### Paso 3 — Obtener Account ID
-
-Está en la URL cuando entras al dashboard:
-```
-https://dash.cloudflare.com/<ACCOUNT_ID>/...
-```
-
-### Paso 4 — Aplicar Terraform
+Las ingress rules se gestionan via **Terraform** (`tunnel_config.tf`) — no en el dashboard.  
+El resource `cloudflare_tunnel_config` reutiliza el mismo `services` map que los DNS CNAMEs.
 
 ```bash
-cd terraform/cloudflare
-cp terraform.tfvars.example terraform.tfvars
-# Edita terraform.tfvars con tus valores
-terraform init
-terraform apply
+make tf-cf-apply   # aplica DNS CNAMEs + tunnel ingress en un solo paso
+```
+
+Terraform configura automáticamente: por cada subdominio en `var.services` crea una regla  
+`hostname = subdominio.dominio → service = http://traefik:80`, más un catch-all `http_status:404`.
+
+> **No configurar Public Hostnames manualmente en el dashboard** — Terraform sobreescribirá esos cambios en el próximo apply.
+
+## Setup de DNS con Terraform
+
+Terraform crea los CNAMEs que apuntan al tunnel. Requiere:
+
+```bash
+# 1. Bootstrap S3 backend (solo 1 vez)
+make tf-bootstrap
+
+# 2. Exportar secrets como variables de entorno
+export TF_VAR_domain="tudominio.com"           # NUNCA committed al repo
+export TF_VAR_cloudflare_api_token="..."
+export TF_VAR_cloudflare_account_id="..."
+export TF_VAR_tunnel_id="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"   # UUID del tunnel
+
+# 3. Aplicar
+make tf-cf-apply
 ```
 
 Terraform crea:
-- 1 tunnel con nombre `homestack-tunnel`
-- 9 CNAMEs apuntando al tunnel (home, n8n, mail, sign, social, vault, stats, metrics, logs)
-- Reglas de ingress que enrutan cada hostname al container Traefik
+- 11 CNAMEs: `home`, `n8n`, `mail`, `sign`, `social`, `vault`, `stats`, `tasks`, `metrics`, `logs`, `dozzle`
+- Todos apuntan a `<tunnel-id>.cfargotunnel.com`
 
-### Paso 5 — Obtener tunnel token y meterlo al .env
+### Obtener los valores
 
-```bash
-terraform output -raw tunnel_token
-```
+**API Token:**
+- Cloudflare → My Profile → API Tokens → Create Token
+- Permisos: `Zone:DNS:Edit` para tu zona
 
-Copia el token y pégalo en `.env`:
-```
-CLOUDFLARE_TUNNEL_TOKEN=eyJh...muchas-letras
-```
+**Account ID:**
+- URL del dashboard: `https://dash.cloudflare.com/<ACCOUNT_ID>/...`
 
-### Paso 6 — Levantar cloudflared
+**Tunnel ID:**
+- Zero Trust → Networks → Tunnels → tu tunnel → ID visible en la lista
 
-Cuando hagas `podman-compose up -d`, el container `cloudflared` lee el token del `.env` y se conecta automáticamente.
+**Tunnel Token:**
+- Zero Trust → Networks → Tunnels → tu tunnel → Configure → token (base64 largo)
 
-Verificar:
-```bash
-podman logs cloudflared
-```
-
-Debes ver:
-```
-INF Connection registered connIndex=0 location=...
-```
-
-## Verificar que funciona
+## Verificar que el tunnel funciona
 
 ```bash
-# Desde tu Mac
+# Logs del container cloudflared
+podman logs cloudflared | grep -v precheck
+
+# Debe mostrar:
+# INF Registered tunnel connection connIndex=0 location=...
+# INF Registered tunnel connection connIndex=1 location=...
+# (4 conexiones = sano)
+```
+
+En Cloudflare dashboard → Zero Trust → Tunnels: debe aparecer **Healthy** (verde).
+
+## Verificar que los servicios responden
+
+```bash
 curl -I https://home.tudominio.com
-
 # Debe devolver headers de Cloudflare:
 # server: cloudflare
 # cf-ray: ...
 ```
 
-Abre en navegador → debe cargar Homepage.
-
 ## Troubleshooting
 
+### "Provided Tunnel token is not valid"
+Pusiste el **Tunnel ID** (UUID) en vez del **Tunnel Token** (base64).  
+Fix: Zero Trust → Tunnels → tu tunnel → Configure → copiar el token largo → actualizar `.env` → `podman-compose up -d --force-recreate cloudflared`
+
+### "Updated to new configuration … http_status:404"
+Tunnel conectado pero sin ingress rules configuradas.  
+Fix: agregar Public Hostnames en Zero Trust (ver sección arriba).
+
 ### "DNS_PROBE_FINISHED_NXDOMAIN"
-- Los CNAMEs tardan ~1 min en propagarse.
-- Verifica: `dig home.tudominio.com CNAME`
-- Debe responder algo como `<tunnel-id>.cfargotunnel.com`
+CNAMEs tardan ~1 min en propagarse.  
+Verificar: `dig home.tudominio.com CNAME` — debe responder `<tunnel-id>.cfargotunnel.com`
 
 ### "Error 502 Bad Gateway"
-- cloudflared está conectado pero Traefik no responde.
-- `podman logs traefik` → ¿está corriendo?
-- `podman exec cloudflared wget -O- http://traefik:80` → ¿conecta?
+cloudflared conectado pero Traefik no responde.  
+`podman logs traefik` — ¿está corriendo?
 
 ### "Error 530"
-- Significa que cloudflared no está conectado.
-- `podman logs cloudflared` → revisa el token
-- Verifica en Cloudflare dashboard → Zero Trust → Networks → Tunnels: debe aparecer "Healthy"
+cloudflared no está conectado al edge.  
+`podman logs cloudflared` — revisar token. Zero Trust → Tunnels: debe estar "Healthy".
 
-### Servicio nuevo, ¿cómo agregarlo?
+## Agregar servicio nuevo
 
-1. En `terraform/cloudflare/variables.tf`, agrega entrada en `services`:
-   ```hcl
-   "nuevoservicio" = "http://traefik:80"
-   ```
-2. `terraform apply`
-3. En `docker-compose.yml`, agrega labels al container:
-   ```yaml
-   labels:
-     - "traefik.enable=true"
-     - "traefik.http.routers.nuevo.rule=Host(`nuevoservicio.${DOMAIN}`)"
-     - "traefik.http.routers.nuevo.entrypoints=web"
-     - "traefik.http.services.nuevo.loadbalancer.server.port=PUERTO"
-   ```
-4. `podman-compose up -d nuevoservicio`
+1. En `terraform/cloudflare/variables.tf`, agregar entrada en `services`
+2. `make tf-cf-apply`
+3. En Zero Trust → Tunnels → Public Hostname → agregar el nuevo subdominio → `http://traefik:80`
+4. En `docker-compose.yml`, agregar labels Traefik al container
 
 ## Plan free vs paid
 
-El plan free de Cloudflare es generoso:
-- Unlimited bandwidth
-- DDoS protection
+El plan **free** de Cloudflare es suficiente para uso personal:
+- Bandwidth ilimitado
+- DDoS protection + WAF
 - SSL gratis
 - 50 tunnels por cuenta
-- Workers, R2, etc.
-
-Para tu caso personal NO necesitas plan paid.

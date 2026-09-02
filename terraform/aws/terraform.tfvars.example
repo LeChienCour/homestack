@@ -1,7 +1,11 @@
-# Copia este archivo a terraform.tfvars y rellena con tus valores.
-# terraform.tfvars está en .gitignore, no se sube.
+# Copia a terraform.tfvars y rellena.
+# IMPORTANTE: domain se pasa como variable de entorno — NO lo pongas en este archivo.
+#
+# Antes de correr terraform:
+#   export TF_VAR_domain="tudominio.com"
+#
+# El Makefile tiene el target `tf-aws-env` para recordarte qué exportar.
 
 aws_region            = "us-east-1"
-aws_profile           = "homestack"
-domain                = "tudominio.com"
+aws_profile           = "admin"          # perfil en ~/.aws/credentials
 from_email_local_part = "noreply"
