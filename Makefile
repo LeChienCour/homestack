@@ -72,7 +72,7 @@ update-socialtrace: ## git pull en ../socialtrace + rebuild/recrea sus 3 contain
 	@test -d "$(SOCIALTRACE_DIR)" || (echo "ERROR: no existe $(SOCIALTRACE_DIR) — ¿repo hermano ausente?"; exit 1)
 	cd $(SOCIALTRACE_DIR) && git pull
 	$(DC) build socialtrace-backend socialtrace-frontend socialtrace-caddy
-	$(DC) up -d socialtrace-backend socialtrace-frontend socialtrace-caddy
+	$(DC) up -d --force-recreate --no-deps socialtrace-backend socialtrace-frontend socialtrace-caddy
 
 .PHONY: ps
 ps: ## Estado de todos los containers
