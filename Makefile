@@ -4,11 +4,12 @@
 # Uso: make <target> [SVC=<servicio>] [CMD=<comando>]
 # Requiere: podman-compose (o docker-compose como fallback)
 
-COMPOSE_FILE := compose/docker-compose.yml
-COMPOSE      := $(shell command -v podman-compose 2>/dev/null || echo "docker compose")
-DC           := $(COMPOSE) -f $(COMPOSE_FILE)
-TF_AWS       := terraform/aws
-TF_CF        := terraform/cloudflare
+COMPOSE_FILE   := compose/docker-compose.yml
+COMPOSE        := $(shell command -v podman-compose 2>/dev/null || echo "docker compose")
+DC             := $(COMPOSE) -f $(COMPOSE_FILE)
+TF_AWS         := terraform/aws
+TF_CF          := terraform/cloudflare
+SOCIALTRACE_DIR := ../socialtrace
 
 # Colores
 CYAN  := \033[0;36m
@@ -65,6 +66,13 @@ recreate: ## Fuerza recreación de todos los containers (sin pull)
 rebuild-configs: ## Rebuildea traefik/postgres/homepage/temporal tras editar su config (ver CLAUDE.md: config horneada, no bind mount)
 	$(DC) build traefik postgres homepage temporal
 	$(DC) up -d traefik postgres homepage temporal
+
+.PHONY: update-socialtrace
+update-socialtrace: ## git pull en ../socialtrace + rebuild/recrea sus 3 containers (build: no se actualiza solo)
+	@test -d "$(SOCIALTRACE_DIR)" || (echo "ERROR: no existe $(SOCIALTRACE_DIR) — ¿repo hermano ausente?"; exit 1)
+	cd $(SOCIALTRACE_DIR) && git pull
+	$(DC) build socialtrace-backend socialtrace-frontend socialtrace-caddy
+	$(DC) up -d socialtrace-backend socialtrace-frontend socialtrace-caddy
 
 .PHONY: ps
 ps: ## Estado de todos los containers
